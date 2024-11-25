@@ -2,8 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
 import json
+import websockets
+import asyncio
 from requests.exceptions import HTTPError, RequestException
 from kismet import KismetAdmin, KismetWorker
+
 
 @dataclass
 class KismetConfig:
@@ -81,6 +84,49 @@ class KismetMonitor:
                     self.alert_new_device(ssid, mac_addr)
                     print(f"Unknown MAC address with listed SSID: {ssid} {mac_addr}")
 
+    def parse_wifi_message(self,message):
+        if "advertising SSID" in message:
+            # Handle both formats by splitting and getting MAC
+            words = message.split()
+            mac_index = words.index("device") + 1
+            mac = words[mac_index]
+            ssid = message.split("'")[1]
+            return mac, ssid
+        return None, None
+
+    async def list_all_events(self):
+        uri = f"ws://pi.local:2501/eventbus/events.ws?user=tech&password=tech"
+        
+        async with websockets.connect(uri) as websocket:
+            print("Connected to Kismet WebSocket")
+
+            # Subscribe to all events
+            subscribe_request = {
+                "SUBSCRIBE": "*"
+            }
+            await websocket.send(json.dumps(subscribe_request))
+            
+            print("Subscribed to all events")
+            mac_to_ssid, alert_enabled = self.load_mac_to_ssid_map()
+
+            # Process received events
+            while True:
+                message = await websocket.recv()
+                data = json.loads(message)
+                event_type = list(data.keys())[0]  # Extract event type
+                if event_type == "MESSAGE":
+                    messageAlert = list(data.values())[0]['kismet.messagebus.message_string']
+                    mac, ssid = self.parse_wifi_message(messageAlert)
+                    if (mac != None and ssid != None):
+                        print("===================================")
+                        print(f"New Mac: {mac} with SSID: {ssid}")
+                        print(f"message:{messageAlert}")
+                        print(f"Received event of type: {event_type}")
+                        if ssid in mac_to_ssid:
+                            if mac not in mac_to_ssid[ssid] and alert_enabled:
+                                self.alert_new_device(ssid, mac)
+                                print(f"Unknown MAC address with listed SSID: {ssid} {mac}")
+
     def monitor(self) -> None:
         """Main monitoring loop."""
         try:
@@ -91,18 +137,20 @@ class KismetMonitor:
             # Load MAC to SSID mapping
             mac_to_ssid, alert_enabled = self.load_mac_to_ssid_map()
 
-            # Get and process recent devices
-            devices = self.worker.get_recent_devices()
-            self.process_devices(devices, mac_to_ssid, alert_enabled)
+            # # Get and process recent devices
+            # devices = self.worker.get_recent_devices()
+            # self.process_devices(devices, mac_to_ssid, alert_enabled)
 
-            # Save updated mapping
-            self.save_mac_to_ssid_map(mac_to_ssid)
+            # # Save updated mapping
+            # self.save_mac_to_ssid_map(mac_to_ssid)
+
+            asyncio.run(self.list_all_events())
+
 
         except RequestException as e:
             print(f"Kismet server communication error: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
-
 
 def main():
     """Main entry point."""
