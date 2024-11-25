@@ -1,0 +1,14 @@
+services:
+  kismet_server:
+    image: docker.io/bumblebnl/kismet
+    volumes:
+    - ./kismet/kismet_site.conf:/etc/kismet/kismet_site.conf
+    - kismet_data:/home/netwraith/.kismet
+    networks:
+      kismet:
+    restart: always
+  
+networks:
+  kismet:
+volumes:
+  kismet_data:
