@@ -1,0 +1,9 @@
+#!/usr/bin/env python
+# This file contains all the necessary parameters for pushover.net, Kismet and Ubiquiti Unifi Controller
+
+
+#Kismet Wireless Config
+kismetUsername = "tech"
+kismetPassword = "tech"
+kismet_server = "pi.local:2501"
+kismet_api_token = "32EA0E04249463826332CCF8A703283E"
