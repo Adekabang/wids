@@ -1,1 +1,3 @@
 auth_info.py
+__pycache__/
+MacAddressToSSID.json
